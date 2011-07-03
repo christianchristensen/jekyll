@@ -26,24 +26,30 @@ puts "made it so far"
 
 def download_image(u)
 	path = 'images/%s' % u.split('/')[-1]
-	url = URI.parse(u)
-	found = false 
-	until found 
-		host, port = url.host, url.port if url.host && url.port 
-		query = url.query ? url.query : ""
-		req = Net::HTTP::Get.new(url.path + '?' + query)
-		res = Net::HTTP.start(host, port) {|http|  http.request(req) } 
-		res.header['location'] ? url = URI.parse(res.header['location']) : found = true 
-	end 
-	open(path, "wb") do |file|
-		file.write(res.body)
+	if !File.exists?(path)
+  	url = URI.parse(u)
+  	found = false 
+  	until found 
+  		host, port = url.host, url.port if url.host && url.port 
+  		query = url.query ? url.query : ""
+  		req = Net::HTTP::Get.new(url.path + '?' + query)
+  		res = Net::HTTP.start(host, port) {|http|  http.request(req) } 
+  		res.header['location'] ? url = URI.parse(res.header['location']) : found = true 
+  	end 
+  	open(path, "wb") do |file|
+  		file.write(res.body)
+  	end
 	end
 	path
 end	
 
 while posts.any?
 	posts.each do |post|
+	  puts post.inspect
 		puts post.title
+		if post.slug.nil?
+		  post.slug = post.title.downcase.gsub(' ', '-')
+	  end
 		slug = post.slug.gsub('/', '-')
 		date = Date.parse(post.display_date)
 		published = !post.is_private
@@ -57,8 +63,14 @@ while posts.any?
 
 		# Get the relevant fields as a hash, delete empty fields and convert
 		# to YAML for the header
+		if perm.path == '/'
+	    pp_permalink = "/index.html"
+    else
+      pp_permalink = perm.path + "/index.html"
+    end
+  
 		data = {
-			'permalink' => perm.path + "/index.html",
+			'permalink' => pp_permalink,
 			'layout' => 'post',
 			'title' => post.title.to_s,
 			'published' => published,
@@ -69,13 +81,16 @@ while posts.any?
 
 		# awefull hack, do not use on vlog or podcast
 		post.media[2]['images'].each do |img|
-			path = download_image(img['full']['url'])
-			tag = "<img src=\"/%s\" alt=\"%s\" />" % [path, img['full']['caption']]
-			puts tag
-			begin
-				content[/\[\[posterous-content:[^\]]*\]\]/] = tag
-			rescue IndexError
-				puts "weird stuff happening"
+		  if !img.nil? && !img['full'].nil? && !img['full']['url'].nil?
+  			path = download_image(img['full']['url'])
+  			tag = "<img src=\"/%s\" alt=\"%s\" />" % [path, img['full']['caption']]
+  			puts tag
+  			begin
+  				content[/\[\[posterous-content:[^\]]*\]\]/] = tag
+  			rescue IndexError
+  				puts "weird stuff happening"
+  				content = content + "\n" + tag
+  			end
 			end
 		end
 
